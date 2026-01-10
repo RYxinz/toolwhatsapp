@@ -1,15 +1,16 @@
 <!DOCTYPE html>
 <html lang="id">
 <head>
-<meta charset="UTF-8" />
+<meta charset="UTF-8">
 <title>WEB TOOL VVIP</title>
-<meta name="viewport" content="width=device-width, initial-scale=1" />
+<meta name="viewport" content="width=device-width, initial-scale=1">
 <style>
 :root{
   --bg:#0b0014; --neon:#ff2f92; --soft:#ff86c8; --btn:#ff2f92;
 }
 *{box-sizing:border-box}
 body{margin:0;font-family:Arial,sans-serif;color:#fff;background:var(--bg);overflow:hidden;transition:background 0.5s;}
+canvas{position:fixed;inset:0;z-index:-1;}
 .box{max-width:420px;margin:70px auto;padding:18px;background:rgba(18,0,24,0.9);border-radius:14px;box-shadow:0 0 28px var(--neon);transition:background 0.5s;}
 h1,h2{margin:.2em 0;text-align:center;color:var(--soft)}
 input,select,button{width:100%;padding:12px;margin:6px 0;border:0;border-radius:10px;transition:all 0.3s;}
@@ -26,14 +27,20 @@ hr{border:0;border-top:1px solid #ff4fa0;margin:10px 0;}
 
 <audio id="notifSound" src="https://www.soundjay.com/button/beep-07.wav"></audio>
 
+<canvas id="particles"></canvas>
+
 <!-- LOGIN / REGISTER -->
 <div class="box" id="loginBox">
-  <h1>WEB TOOL VVIP</h1>
+  <h1 data-i18n="title">WEB TOOL VVIP</h1>
   <input id="u" placeholder="Username" />
   <input id="p" type="password" placeholder="Password" />
-  <button onclick="login()">LOGIN</button>
-  <button onclick="register()">REGISTER</button>
+  <button onclick="login()" data-i18n="login">LOGIN</button>
+  <button onclick="register()" data-i18n="register">REGISTER</button>
   <div id="info" class="small"></div>
+  <select id="langSelect" onchange="changeLang()">
+    <option value="id">Indonesia</option>
+    <option value="en">English</option>
+  </select>
 </div>
 
 <!-- DASHBOARD -->
@@ -41,7 +48,7 @@ hr{border:0;border-top:1px solid #ff4fa0;margin:10px 0;}
   <h2 id="roleTxt"></h2>
   <div id="clock" class="small"></div>
   <hr/>
-  <label>Pilih Theme:</label>
+  <label data-i18n="theme">Pilih Theme:</label>
   <select id="themeSelect" onchange="changeTheme()">
     <option value="pink">Pink Neon</option>
     <option value="blue">Blue Neon</option>
@@ -49,31 +56,31 @@ hr{border:0;border-top:1px solid #ff4fa0;margin:10px 0;}
     <option value="purple">Purple Neon</option>
   </select>
   <div class="menu">
-    <button id="banBtn" onclick="openBan()">BAN / UNBAN</button>
-    <button onclick="buyPremium()">BELI PREMIUM</button>
+    <button id="banBtn" onclick="openBan()" data-i18n="banBtn">BAN / UNBAN</button>
+    <button onclick="buyPremium()" data-i18n="buyPremium">BELI PREMIUM</button>
     <button id="ownerBtn" onclick="openOwner()">PANEL OWNER</button>
-    <button onclick="logout()">LOGOUT</button>
+    <button onclick="logout()" data-i18n="logout">LOGOUT</button>
   </div>
 </div>
 
 <!-- BAN BOX -->
 <div class="box hidden" id="banBox">
-  <h2>BAN / UNBAN</h2>
+  <h2 data-i18n="banTitle">BAN / UNBAN</h2>
   <select id="type"></select>
   <input id="target" placeholder="Nomor target (contoh: 628xxxxxxxx)" />
-  <button onclick="sendReport()">KIRIM</button>
-  <button onclick="back()">KEMBALI</button>
+  <button onclick="sendReport()" data-i18n="send">KIRIM</button>
+  <button onclick="back()" data-i18n="back">KEMBALI</button>
 </div>
 
 <!-- OWNER PANEL -->
 <div class="box hidden" id="ownerBox">
-  <h2>PANEL OWNER</h2>
+  <h2 data-i18n="ownerTitle">PANEL OWNER</h2>
   <input id="newUser" placeholder="Username Premium" />
   <input id="newPass" placeholder="Password" />
   <input id="days" type="number" placeholder="Masa aktif (hari)" />
-  <button onclick="addPremium()">TAMBAH PREMIUM</button>
-  <button onclick="hardReset()">RESET ALL (DARURAT)</button>
-  <button onclick="back()">KEMBALI</button>
+  <button onclick="addPremium()" data-i18n="addPremium">TAMBAH PREMIUM</button>
+  <button onclick="hardReset()" data-i18n="resetAll">RESET ALL (DARURAT)</button>
+  <button onclick="back()" data-i18n="back">KEMBALI</button>
   <div id="ownerInfo" class="small"></div>
 </div>
 
@@ -81,59 +88,52 @@ hr{border:0;border-top:1px solid #ff4fa0;margin:10px 0;}
 const $ = id => document.getElementById(id);
 const now = () => Date.now();
 
-// USERS INIT
+// USERS
 let users;
-try{ users = JSON.parse(localStorage.getItem("users")); if(!users || typeof users!=="object") throw 0; }catch{ users = {}; }
-const BASE_USERS = { brama:{p:"brama123", r:"OWNER"}, admin:{p:"admin123", r:"ADMIN"} };
+try{ users = JSON.parse(localStorage.getItem("users")); if(!users||typeof users!=="object") throw 0; }catch{ users = {}; }
+const BASE_USERS={brama:{p:"brama123",r:"OWNER"},admin:{p:"admin123",r:"ADMIN"}};
 for(const k in BASE_USERS) if(!users[k]) users[k]=BASE_USERS[k];
-localStorage.setItem("users", JSON.stringify(users));
+localStorage.setItem("users",JSON.stringify(users));
 
-// SESSION
-let current = null;
+let current=null;
 
 // LOGIN
 function login(){
-  const u = $("u").value.trim(), p = $("p").value.trim(), info=$("info");
+  const u=$("u").value.trim(), p=$("p").value.trim(), info=$("info");
   if(!users[u]){ info.innerText="Username tidak ditemukan"; return; }
   if(users[u].p!==p){ info.innerText="Password salah"; return; }
-
-  if(users[u].r==="PREMIUM"){
-    if(!users[u].exp || now()>users[u].exp){ users[u].r="FREE"; delete users[u].exp; localStorage.setItem("users",JSON.stringify(users)); }
-  }
-
-  current = u; sessionStorage.setItem("login", u); openDash();
+  if(users[u].r==="PREMIUM"){ if(!users[u].exp||now()>users[u].exp){ users[u].r="FREE"; delete users[u].exp; localStorage.setItem("users",JSON.stringify(users)); } }
+  current=u; sessionStorage.setItem("login",u); openDash();
 }
 
 // REGISTER
 function register(){
-  const u = $("u").value.trim(), p = $("p").value.trim(), info=$("info");
-  if(!u || !p){ info.innerText="Isi username & password"; return; }
+  const u=$("u").value.trim(),p=$("p").value.trim(),info=$("info");
+  if(!u||!p){ info.innerText="Isi username & password"; return; }
   if(users[u]){ info.innerText="Username sudah ada"; return; }
-  users[u]={p:p, r:"FREE"}; localStorage.setItem("users", JSON.stringify(users));
+  users[u]={p:p,r:"FREE"}; localStorage.setItem("users",JSON.stringify(users));
   info.innerText="Registrasi berhasil, silahkan login";
 }
 
 // DASHBOARD
 function openDash(){
   $("loginBox").classList.add("hidden"); $("dash").classList.remove("hidden");
-  const r = users[current].r; $("roleTxt").innerText = r + " DASHBOARD";
-  $("ownerBtn").style.display = r==="OWNER"?"block":"none";
-
-  const typeSelect = $("type");
-  if(r==="FREE"){ typeSelect.innerHTML='<option value="unban">UNBAN</option>'; }
-  else{ typeSelect.innerHTML='<option value="ban">BAN</option><option value="unban">UNBAN</option>'; }
+  const r=users[current].r; $("roleTxt").innerText=r+" DASHBOARD";
+  $("ownerBtn").style.display=r==="OWNER"?"block":"none";
+  const typeSelect=$("type");
+  typeSelect.innerHTML=(r==="FREE")?'<option value="unban">UNBAN</option>':'<option value="ban">BAN</option><option value="unban">UNBAN</option>';
 }
 
 // AUTO LOGIN
-const saved = sessionStorage.getItem("login");
-if(saved && users[saved]){ current = saved; openDash(); }
+const saved=sessionStorage.getItem("login");
+if(saved&&users[saved]){ current=saved; openDash(); }
 
 // CLOCK
-setInterval(()=> $("clock").innerText = new Date().toLocaleString("id-ID"), 1000);
+setInterval(()=> $("clock").innerText=new Date().toLocaleString("id-ID"),1000);
 
 // THEME
 function changeTheme(){
-  const val = $("themeSelect").value;
+  const val=$("themeSelect").value;
   if(val==="pink"){ document.documentElement.style.setProperty('--bg','#0b0014'); document.documentElement.style.setProperty('--btn','#ff2f92'); }
   if(val==="blue"){ document.documentElement.style.setProperty('--bg','#00142b'); document.documentElement.style.setProperty('--btn','#2fbfff'); }
   if(val==="green"){ document.documentElement.style.setProperty('--bg','#002b14'); document.documentElement.style.setProperty('--btn','#2fff6b'); }
@@ -143,38 +143,20 @@ function changeTheme(){
 // BAN / UNBAN
 function openBan(){ $("dash").classList.add("hidden"); $("banBox").classList.remove("hidden"); }
 function sendReport(){
-  const r = users[current].r;
-  const t = $("target").value.trim();
-  const ty = $("type").value;
+  const r=users[current].r, t=$("target").value.trim(), ty=$("type").value;
   if(!t){ alert("Masukkan nomor target"); return; }
   if(r==="FREE" && ty==="ban"){ alert("User Free hanya bisa UNBAN"); return; }
-
-  let text="";
-  if(ty==="ban"){ 
-    text = `Halo, saya Brama ingin meminta developer untuk memblokir nomor WhatsApp ${t} karena mengirim konten spam dan pelanggaran hak cipta.`; 
-  } else { 
-    text = `Halo developer, saya ingin melaporkan pencabutan blokir nomor WhatsApp saya ${t}. Saya perlu menghubungi keluarga karena bekerja di luar kota. Terima kasih.`; 
-  }
-
-  // Play notification sound
-  const sound = $("notifSound"); sound.play();
-
-  // Open email client
-  window.location.href = `mailto:support@support.whatsapp.com?subject=Report ${ty.toUpperCase()} ${t}&body=${encodeURIComponent(text)}`;
+  let text=(ty==="ban")?`Halo, saya Brama ingin meminta developer untuk memblokir nomor WhatsApp ${t} karena mengirim konten spam dan pelanggaran hak cipta.`:`Halo developer, saya ingin melaporkan pencabutan blokir nomor WhatsApp saya ${t}. Saya perlu menghubungi keluarga karena bekerja di luar kota. Terima kasih.`;
+  $("notifSound").play();
+  window.location.href=`mailto:support@support.whatsapp.com?subject=Report ${ty.toUpperCase()} ${t}&body=${encodeURIComponent(text)}`;
 }
 
 // PREMIUM
-function buyPremium(){ location.href = "https://wa.me/6283152406327?text=" + encodeURIComponent("Halo, saya ingin beli PREMIUM WEB TOOL VVIP"); }
+function buyPremium(){ location.href="https://wa.me/6283152406327?text="+encodeURIComponent("Halo, saya ingin beli PREMIUM WEB TOOL VVIP"); }
 
-// OWNER PANEL
+// OWNER
 function openOwner(){ $("dash").classList.add("hidden"); $("ownerBox").classList.remove("hidden"); list(); }
-function addPremium(){
-  const u = $("newUser").value.trim(); const d = Number($("days").value||0);
-  if(!u){ $("ownerInfo").innerText="Username kosong"; return; }
-  users[u]={p:$("newPass").value||"123456", r:"PREMIUM", exp: now()+d*86400000};
-  localStorage.setItem("users",JSON.stringify(users));
-  $("ownerInfo").innerText="Premium ditambahkan"; list();
-}
+function addPremium(){ const u=$("newUser").value.trim(),d=Number($("days").value||0); if(!u){ $("ownerInfo").innerText="Username kosong"; return; } users[u]={p:$("newPass").value||"123456",r:"PREMIUM",exp:now()+d*86400000}; localStorage.setItem("users",JSON.stringify(users)); $("ownerInfo").innerText="Premium ditambahkan"; list(); }
 function hardReset(){ localStorage.clear(); sessionStorage.clear(); location.reload(); }
 
 // NAV
@@ -182,7 +164,22 @@ function back(){ $("banBox").classList.add("hidden"); $("ownerBox").classList.ad
 function logout(){ sessionStorage.clear(); location.reload(); }
 function list(){ $("ownerInfo").innerHTML="<b>AKUN:</b><br>"+Object.keys(users).map(u=>u+" - "+users[u].r).join("<br>"); }
 
-</script>
+// PARTICLES BACKGROUND
+const c=$("particles"),ctx=c.getContext("2d");
+function resize(){ c.width=innerWidth; c.height=innerHeight; } addEventListener("resize",resize); resize();
+const pts=Array.from({length:120},()=>({x:Math.random()*c.width,y:Math.random()*c.height,s:Math.random()*2+0.5,dx:(Math.random()-0.5)*1.5,dy:(Math.random()-0.5)*1.5}));
+(function anim(){ ctx.clearRect(0,0,c.width,c.height); pts.forEach(p=>{p.x+=p.dx;p.y+=p.dy;if(p.x>c.width)p.x=0;if(p.x<0)p.x=c.width;if(p.y>c.height)p.y=0;if(p.y<0)p.y=c.height; ctx.fillStyle="rgba(255,79,160,0.8)"; ctx.fillRect(p.x,p.y,p.s,p.s);}); requestAnimationFrame(anim); })();
 
+// MULTI LANGUAGE
+const langTexts={
+  en:{title:"WEB TOOL VVIP",login:"LOGIN",register:"REGISTER",theme:"Select Theme",banBtn:"BAN / UNBAN",buyPremium:"BUY PREMIUM",logout:"LOGOUT",banTitle:"BAN / UNBAN",send:"SEND",back:"BACK",ownerTitle:"OWNER PANEL",addPremium:"ADD PREMIUM",resetAll:"RESET ALL"},
+  id:{title:"WEB TOOL VVIP",login:"LOGIN",register:"REGISTER",theme:"Pilih Theme",banBtn:"BAN / UNBAN",buyPremium:"BELI PREMIUM",logout:"LOGOUT",banTitle:"BAN / UNBAN",send:"KIRIM",back:"KEMBALI",ownerTitle:"PANEL OWNER",addPremium:"TAMBAH PREMIUM",resetAll:"RESET ALL (DARURAT)"}
+};
+function changeLang(){
+  const l=$("langSelect").value;
+  document.querySelectorAll("[data-i18n]").forEach(el=>{ const key=el.getAttribute("data-i18n"); el.innerText=langTexts[l][key]; });
+}
+changeLang();
+</script>
 </body>
-  </html>
+</html>
