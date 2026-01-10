@@ -1,0 +1,180 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+<meta charset="UTF-8" />
+<title>WEB TOOL VVIP</title>
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<style>
+:root{
+  --bg1:#0b0014; --bg2:#1a0026; --neon:#ff2f92; --soft:#ff86c8;
+}
+*{box-sizing:border-box}
+body{margin:0;font-family:Arial,sans-serif;color:#fff;background:radial-gradient(circle at top,var(--bg2),var(--bg1));overflow:hidden}
+canvas{position:fixed;inset:0;z-index:-1}
+.box{max-width:420px;margin:70px auto;padding:18px;background:#120018e6;border-radius:14px;box-shadow:0 0 28px var(--neon)}
+h1,h2{margin:.2em 0;text-align:center;color:var(--soft)}
+input,select,button{width:100%;padding:12px;margin:6px 0;border:0;border-radius:10px}
+input,select{background:#1e002b;color:#fff}
+button{background:var(--neon);color:#fff;font-weight:700;cursor:pointer}
+button[disabled]{opacity:.45;cursor:not-allowed}
+.small{font-size:12px;color:#ffb3df;text-align:center}
+.hidden{display:none}
+hr{border:0;border-top:1px solid #ff4fa0;margin:10px 0}
+.menu button{margin-top:8px}
+</style>
+</head>
+<body>
+
+<canvas id="fx"></canvas>
+
+<!-- LOGIN / REGISTER -->
+<div class="box" id="loginBox">
+  <h1>WEB TOOL VVIP</h1>
+  <input id="u" placeholder="Username" />
+  <input id="p" type="password" placeholder="Password" />
+  <button onclick="login()">LOGIN</button>
+  <button onclick="register()">REGISTER</button>
+  <div id="info" class="small"></div>
+</div>
+
+<!-- DASHBOARD -->
+<div class="box hidden" id="dash">
+  <h2 id="roleTxt"></h2>
+  <div id="clock" class="small"></div>
+  <hr/>
+  <div class="menu">
+    <button id="banBtn" onclick="openBan()">BAN / UNBAN</button>
+    <button onclick="buyPremium()">BELI PREMIUM</button>
+    <button id="ownerBtn" onclick="openOwner()">PANEL OWNER</button>
+    <button onclick="logout()">LOGOUT</button>
+  </div>
+</div>
+
+<!-- BAN BOX -->
+<div class="box hidden" id="banBox">
+  <h2>BAN / UNBAN</h2>
+  <select id="type"></select>
+  <input id="target" placeholder="Nomor target (contoh: 628xxxxxxxx)" />
+  <button onclick="sendReport()">KIRIM</button>
+  <button onclick="back()">KEMBALI</button>
+</div>
+
+<!-- OWNER PANEL -->
+<div class="box hidden" id="ownerBox">
+  <h2>PANEL OWNER</h2>
+  <input id="newUser" placeholder="Username Premium" />
+  <input id="newPass" placeholder="Password" />
+  <input id="days" type="number" placeholder="Masa aktif (hari)" />
+  <button onclick="addPremium()">TAMBAH PREMIUM</button>
+  <button onclick="resetDevice()">RESET DEVICE USER</button>
+  <button onclick="hardReset()">RESET ALL (DARURAT)</button>
+  <button onclick="back()">KEMBALI</button>
+  <div id="ownerInfo" class="small"></div>
+</div>
+
+<script>
+const $ = id => document.getElementById(id);
+const now = () => Date.now();
+
+// DEVICE
+let deviceId = localStorage.getItem("deviceId");
+if(!deviceId){ deviceId = "dev-" + Math.random().toString(36).slice(2); localStorage.setItem("deviceId", deviceId); }
+
+// USERS INIT
+const BASE_USERS = { brama:{p:"brama123", r:"OWNER"}, admin:{p:"admin123", r:"ADMIN"} };
+let users;
+try{ users = JSON.parse(localStorage.getItem("users")); if(!users || typeof users!=="object") throw 0; }catch{ users = {}; }
+for(const k in BASE_USERS) if(!users[k]) users[k]=BASE_USERS[k];
+localStorage.setItem("users", JSON.stringify(users));
+
+// SESSION
+let current = null;
+
+// LOGIN
+function login(){
+  const u = $("u").value.trim(), p = $("p").value.trim(), info=$("info");
+  if(!users[u]){ info.innerText="Username tidak ditemukan"; return; }
+  if(users[u].p!==p){ info.innerText="Password salah"; return; }
+  if(users[u].r==="PREMIUM" && users[u].exp && now()>users[u].exp){ users[u].r="FREE"; delete users[u].exp; localStorage.setItem("users",JSON.stringify(users)); }
+  if(users[u].device && users[u].device!==deviceId){ info.innerText="Akun terkunci di device lain"; return; }
+  users[u].device=deviceId; localStorage.setItem("users", JSON.stringify(users));
+  current = u; sessionStorage.setItem("login", u); openDash();
+}
+
+// REGISTER
+function register(){
+  const u = $("u").value.trim(), p = $("p").value.trim(), info=$("info");
+  if(!u || !p){ info.innerText="Isi username & password"; return; }
+  if(users[u]){ info.innerText="Username sudah ada"; return; }
+  users[u]={p:p, r:"FREE"}; localStorage.setItem("users", JSON.stringify(users));
+  info.innerText="Registrasi berhasil, silahkan login";
+}
+
+// DASHBOARD
+function openDash(){
+  $("loginBox").classList.add("hidden"); $("dash").classList.remove("hidden");
+  const r = users[current].r; $("roleTxt").innerText = r + " DASHBOARD";
+  $("ownerBtn").style.display = r==="OWNER"?"block":"none";
+
+  const typeSelect = $("type");
+  if(r==="FREE"){ typeSelect.innerHTML='<option value="unban">UNBAN</option>'; }
+  else{ typeSelect.innerHTML='<option value="ban">BAN</option><option value="unban">UNBAN</option>'; }
+
+  $("banBtn").disabled = false;
+}
+
+// AUTO LOGIN
+const saved = sessionStorage.getItem("login");
+if(saved && users[saved]){ current = saved; openDash(); }
+
+// CLOCK
+setInterval(()=> $("clock").innerText = new Date().toLocaleString("id-ID"), 1000);
+
+// BAN / UNBAN (via email)
+function openBan(){ $("dash").classList.add("hidden"); $("banBox").classList.remove("hidden"); }
+function sendReport(){
+  const r = users[current].r;
+  const t = $("target").value.trim();
+  const ty = $("type").value;
+  if(!t){ alert("Masukkan nomor target"); return; }
+  if(r==="FREE" && ty==="ban"){ alert("User Free hanya bisa UNBAN"); return; }
+
+  let text="";
+  if(ty==="ban"){ 
+    text = `Halo, saya Brama ingin meminta developer untuk memblokir nomor WhatsApp ${t} karena mengirim konten spam dan pelanggaran hak cipta.`; 
+  } else { 
+    text = `Halo developer, saya ingin melaporkan pencabutan blokir nomor WhatsApp saya ${t}. Saya perlu menghubungi keluarga karena bekerja di luar kota. Terima kasih.`; 
+  }
+
+  window.location.href = `mailto:support@support.whatsapp.com?subject=Report ${ty.toUpperCase()} ${t}&body=${encodeURIComponent(text)}`;
+}
+
+// PREMIUM
+function buyPremium(){ location.href = "https://wa.me/6283152406327?text=" + encodeURIComponent("Halo, saya ingin beli PREMIUM WEB TOOL VVIP"); }
+
+// OWNER PANEL
+function openOwner(){ $("dash").classList.add("hidden"); $("ownerBox").classList.remove("hidden"); list(); }
+function addPremium(){
+  const u = $("newUser").value.trim(); const d = Number($("days").value||0);
+  if(!u){ $("ownerInfo").innerText="Username kosong"; return; }
+  users[u]={p:$("newPass").value||"123456", r:"PREMIUM", exp: now()+d*86400000};
+  localStorage.setItem("users",JSON.stringify(users));
+  $("ownerInfo").innerText="Premium ditambahkan"; list();
+}
+function resetDevice(){ const u=$("newUser").value.trim(); if(users[u]){ delete users[u].device; localStorage.setItem("users",JSON.stringify(users)); $("ownerInfo").innerText="Device reset"; } }
+function hardReset(){ localStorage.clear(); sessionStorage.clear(); location.reload(); }
+
+// NAV
+function back(){ $("banBox").classList.add("hidden"); $("ownerBox").classList.add("hidden"); $("dash").classList.remove("hidden"); }
+function logout(){ sessionStorage.clear(); location.reload(); }
+function list(){ $("ownerInfo").innerHTML="<b>AKUN:</b><br>"+Object.keys(users).map(u=>u+" - "+users[u].r).join("<br>"); }
+
+// PARTICLES (background neon)
+const c=$("fx"),ctx=c.getContext("2d");
+function resize(){ c.width=innerWidth; c.height=innerHeight; } addEventListener("resize",resize); resize();
+const pts=Array.from({length:90},()=>({x:Math.random()*c.width,y:Math.random()*c.height,s:Math.random()*2+0.5}));
+(function anim(){ctx.clearRect(0,0,c.width,c.height); pts.forEach(p=>{p.y+=0.5;if(p.y>c.height)p.y=0; ctx.fillStyle="#ff4fa0"; ctx.fillRect(p.x,p.y,p.s,p.s);}); requestAnimationFrame(anim);})();
+</script>
+
+</body>
+  </html>
