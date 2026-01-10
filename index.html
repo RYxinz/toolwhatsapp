@@ -1,0 +1,273 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+<meta charset="UTF-8">
+<title>BramzBan</title>
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<style>
+body{
+ margin:0;font-family:Segoe UI,Arial;
+ background:radial-gradient(circle,#300,#000);
+ color:#fff;min-height:100vh}
+.container{
+ max-width:560px;margin:30px auto;padding:20px;
+ background:#120000;border-radius:18px;
+ box-shadow:0 0 40px #ff0000}
+h1{text-align:center;color:#ff2a2a;text-shadow:0 0 15px #ff0000}
+h2{margin-top:0;color:#ff8a8a}
+input,select,textarea,button{
+ width:100%;padding:12px;margin:8px 0;
+ border:none;border-radius:12px;font-size:14px}
+input,select,textarea{background:#1a0000;color:#fff}
+button{
+ background:linear-gradient(45deg,#ff0000,#ff5a5a);
+ color:#fff;font-weight:700;cursor:pointer}
+button.secondary{
+ background:#2a0000}
+button[disabled]{opacity:.4;cursor:not-allowed}
+.hidden{display:none}
+.badge{
+ display:inline-block;padding:6px 14px;
+ border-radius:20px;background:#300;
+ box-shadow:0 0 12px red;margin-bottom:10px}
+#clock{text-align:center;font-size:13px;opacity:.85}
+.note{font-size:12px;opacity:.8;text-align:center}
+.list{
+ background:#0e0000;border-radius:12px;padding:10px}
+.list div{
+ padding:6px 0;border-bottom:1px dashed #300}
+.list div:last-child{border-bottom:none}
+footer{text-align:center;font-size:12px;opacity:.6;margin:20px}
+</style>
+</head>
+
+<body>
+
+<!-- LOGIN -->
+<div class="container" id="loginBox">
+<h1>BRAMZBAN</h1>
+<input id="u" placeholder="Username">
+<input id="p" type="password" placeholder="Password">
+<button onclick="login()">LOGIN</button>
+<small id="info"></small>
+</div>
+
+<!-- DASHBOARD -->
+<div class="container hidden" id="dash">
+<div class="badge" id="roleBadge"></div>
+<div id="clock"></div>
+
+<select id="lang" onchange="updateText()">
+ <option value="id">Bahasa Indonesia</option>
+ <option value="en">English</option>
+</select>
+
+<select id="type" onchange="updateText()">
+ <option value="">Jenis Laporan</option>
+ <option value="ban">BAN (Premium)</option>
+ <option value="unban">UNBAN</option>
+</select>
+
+<input id="sender" placeholder="Nomor WhatsApp Anda (628xxx)">
+<input id="target" placeholder="Nomor Target (62xxx)">
+
+<textarea id="msg" rows="6" placeholder="Teks laporan otomatis"></textarea>
+
+<button id="sendBtn" onclick="send()">KIRIM KE EMAIL</button>
+
+<div id="buyBox" class="hidden">
+ <div class="note">Fitur BAN hanya untuk akun PREMIUM</div>
+ <button onclick="buyPremium()">BELI PREMIUM</button>
+</div>
+
+<button id="ownerBtn" class="secondary hidden" onclick="openOwner()">OWNER PANEL</button>
+<button class="secondary" onclick="logout()">LOGOUT</button>
+</div>
+
+<!-- OWNER PANEL -->
+<div class="container hidden" id="ownerPanel">
+<h2>OWNER PANEL</h2>
+<div class="badge">OWNER ONLY</div>
+
+<input id="newUser" placeholder="Username Premium Baru">
+<input id="newPass" placeholder="Password Premium Baru">
+<button onclick="addPremium()">TAMBAH AKUN PREMIUM</button>
+
+<h3>Daftar Akun PREMIUM</h3>
+<div class="list" id="premiumList"></div>
+
+<button class="secondary" onclick="backDash()">KEMBALI</button>
+</div>
+
+<footer>© 2026 BramzBan • Owner Panel Enabled</footer>
+
+<script>
+/* ================= BASE USERS ================= */
+const baseUsers = {
+  brama: { password:"brama123", role:"OWNER" },
+  admin: { password:"admin123", role:"ADMIN" },
+  premium1: { password:"prem123", role:"PREMIUM" }
+};
+
+/* ================= LOAD USERS ================= */
+let users = JSON.parse(localStorage.getItem("users")) || baseUsers;
+
+/* ================= SESSION ================= */
+let session = JSON.parse(localStorage.getItem("session"));
+if(session) openDash(session);
+
+/* ================= LOGIN ================= */
+function login(){
+ let user=u.value.trim(), pass=p.value.trim();
+ if(users[user] && users[user].password===pass){
+  session={u:user, r:users[user].role};
+  localStorage.setItem("session", JSON.stringify(session));
+  openDash(session);
+ } else {
+  info.innerText="Username atau password salah";
+ }
+}
+
+/* ================= DASH ================= */
+function openDash(s){
+ loginBox.classList.add("hidden");
+ ownerPanel.classList.add("hidden");
+ dash.classList.remove("hidden");
+ roleBadge.innerText = s.r;
+ if(s.r==="OWNER") ownerBtn.classList.remove("hidden");
+ updateClock();
+ updateAccess();
+ updateText();
+}
+
+/* ================= CLOCK ================= */
+function updateClock(){
+ setInterval(()=>clock.innerText=new Date().toLocaleString(),1000);
+}
+
+/* ================= ACCESS CONTROL ================= */
+function updateAccess(){
+ const isPremium = (session.r==="PREMIUM" || session.r==="OWNER");
+ const banOption = [...type.options].find(o=>o.value==="ban");
+ if(!isPremium){
+  banOption.disabled = true;
+  sendBtn.disabled = true;
+  buyBox.classList.remove("hidden");
+ } else {
+  banOption.disabled = false;
+  sendBtn.disabled = false;
+  buyBox.classList.add("hidden");
+ }
+}
+
+/* ================= AUTO TEXT ================= */
+function updateText(){
+ let n=target.value||"62xxx";
+ let s=sender.value||"628xxx";
+ let l=lang.value;
+ let t=type.value;
+ let text="";
+ if(l==="id" && t==="ban"){
+  text=`Halo, saya Brama.
+
+Saya melaporkan nomor WhatsApp ${n} karena mengirim tautan perjudian online, konten pornografi, dan melanggar hak cipta.
+
+Nomor saya:
+${s}
+
+Terima kasih.`;
+ }
+ if(l==="id" && t==="unban"){
+  text=`Halo tim WhatsApp.
+
+Saya mengajukan banding atas pemblokiran nomor WhatsApp ${n}.
+Saya bekerja di luar negeri dan perlu berkomunikasi dengan keluarga.
+
+Nomor saya:
+${s}
+
+Terima kasih.`;
+ }
+ if(l==="en" && t==="ban"){
+  text=`Hello,
+
+I am reporting WhatsApp number ${n} for sending gambling links, pornographic content, and violating copyright.
+
+My number:
+${s}
+
+Thank you.`;
+ }
+ if(l==="en" && t==="unban"){
+  text=`Hello WhatsApp Team,
+
+I would like to appeal the blocking of my WhatsApp number ${n}.
+I work abroad and need to communicate with my family.
+
+My number:
+${s}
+
+Thank you.`;
+ }
+ msg.value=text;
+}
+
+/* ================= SEND ================= */
+function send(){
+ if(!msg.value) return alert("Lengkapi data laporan");
+ location.href=
+ `mailto:support@support.whatsapp.com?subject=WhatsApp Report&body=${encodeURIComponent(msg.value)}`;
+}
+
+/* ================= BUY PREMIUM ================= */
+function buyPremium(){
+ const wa="6283152406327";
+ const text=`Halo admin, saya ingin membeli PREMIUM BramzBan.
+
+Username: ${session.u}
+Terima kasih.`;
+ location.href=`https://wa.me/${wa}?text=${encodeURIComponent(text)}`;
+}
+
+/* ================= OWNER PANEL ================= */
+function openOwner(){
+ if(session.r!=="OWNER") return;
+ dash.classList.add("hidden");
+ ownerPanel.classList.remove("hidden");
+ renderPremiumList();
+}
+function backDash(){
+ ownerPanel.classList.add("hidden");
+ dash.classList.remove("hidden");
+}
+function addPremium(){
+ const u=newUser.value.trim();
+ const p=newPass.value.trim();
+ if(!u || !p) return alert("Isi username & password");
+ if(users[u]) return alert("Username sudah ada");
+ users[u]={password:p, role:"PREMIUM"};
+ localStorage.setItem("users", JSON.stringify(users));
+ newUser.value=""; newPass.value="";
+ renderPremiumList();
+ alert("Akun premium ditambahkan");
+}
+function renderPremiumList(){
+ premiumList.innerHTML="";
+ Object.keys(users).forEach(k=>{
+  if(users[k].role==="PREMIUM"){
+   const d=document.createElement("div");
+   d.textContent=`${k}`;
+   premiumList.appendChild(d);
+  }
+ });
+}
+
+/* ================= LOGOUT ================= */
+function logout(){
+ localStorage.removeItem("session");
+ location.reload();
+}
+</script>
+
+</body>
+  </html>
